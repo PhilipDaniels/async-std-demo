@@ -11,7 +11,8 @@ fn main() {
     //demo_waiting_for_two_async_fns();
     //demo_waiting_for_multiple_random_sleeps();
     //demo_waiting_for_multiple_random_sleeps_with_return_values();
-    demo_waiting_for_multiple_random_sleeps_with_errors();
+    //demo_waiting_for_multiple_random_sleeps_with_errors();
+    demo_downloading_urls();
 
     println!("Program finished in {} ms", start_time.elapsed().as_millis());
 }
@@ -87,18 +88,18 @@ fn demo_waiting_for_multiple_random_sleeps_with_return_values() {
     let between = Uniform::from(500..10_000);
     let mut rng = rand::thread_rng();
 
-    let mut cf = FuturesUnordered::new();
+    let mut futures = FuturesUnordered::new();
 
     for future_number in 0..10 {
         let random_millis = between.sample(&mut rng);
-        cf.push(sleep_and_print_and_return_value(future_number, random_millis));
+        futures.push(sleep_and_print_and_return_value(future_number, random_millis));
     }
 
     // The async block borrows a mutable reference to `sum`, allowing us to
     // add up all the values returned from the future.
     let mut sum = 0;
     task::block_on(async {
-        while let Some(value_returned_from_the_future) = cf.next().await {
+        while let Some(value_returned_from_the_future) = futures.next().await {
             sum += value_returned_from_the_future;
         }
     });
@@ -142,4 +143,58 @@ fn demo_waiting_for_multiple_random_sleeps_with_errors() {
     });
 
     println!("Sum of all values returned = {}", sum);
+}
+
+async fn download_url(url: &str) -> Result<String, surf::Exception> {
+    println!("Downloading {} on thread {:?}", url, thread::current().id());
+
+    // Code taken directly from the example for `surf`.
+    let mut result = surf::get(url).await?;
+    let body = result.body_string().await?;
+
+    println!("    Downloaded {}, returning body of length {} ", url, body.len());
+    Ok(body)
+}
+
+fn demo_downloading_urls() {
+    let urls = vec![
+        "https://www.sharecast.com/equity/Anglo_American",
+        "https://www.sharecast.com/equity/Associated_British_Foods",
+        "https://www.sharecast.com/equity/Admiral_Group",
+        "https://www.sharecast.com/equity/Aberdeen_Asset_Management",
+        "https://www.sharecast.com/equity/Aggreko",
+        "https://www.sharecast.com/equity/Ashtead_Group",
+        "https://www.sharecast.com/equity/Antofagasta",
+        "https://www.sharecast.com/equity/Aviva",
+        "https://www.sharecast.com/equity/AstraZeneca",
+        "https://www.sharecast.com/equity/BAE_Systems",
+        "https://www.sharecast.com/equity/Babcock_International_Group",
+        "https://www.sharecast.com/equity/British_American_Tobacco",
+        "https://www.sharecast.com/equity/Balfour_Beatty",
+        "https://www.sharecast.com/equity/Barratt_Developments",
+        "https://www.sharecast.com/equity/BG_Group",
+        "https://www.sharecast.com/equity/British_Land_Company",
+        "https://www.sharecast.com/equity/BHP_Group",
+        "https://www.sharecast.com/equity/Bunzl",
+        "https://www.sharecast.com/equity/BP",
+        "https://www.sharecast.com/equity/Burberry_Group",
+        "https://www.sharecast.com/equity/BT_Group",
+    ];
+
+    // This time let's make our FuturesUnordered value by collecting
+    // a set of futures.
+    let mut futures = urls.iter()
+        .map(|url| download_url(url))
+        .collect::<FuturesUnordered<_>>();
+
+    task::block_on(async {
+        while let Some(return_val) = futures.next().await {
+            match return_val {
+                Ok(body) => {
+                    // Possibly do something useful with the body of the request here.
+                },
+                Err(e) => println!("    Got error {:?}", e),
+            }
+        }
+    });
 }
