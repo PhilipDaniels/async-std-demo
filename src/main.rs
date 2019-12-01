@@ -10,7 +10,8 @@ fn main() {
 
     //demo_waiting_for_two_async_fns();
     //demo_waiting_for_multiple_random_sleeps();
-    demo_waiting_for_multiple_random_sleeps_with_return_values();
+    //demo_waiting_for_multiple_random_sleeps_with_return_values();
+    demo_waiting_for_multiple_random_sleeps_with_errors();
 
     println!("Program finished in {} ms", start_time.elapsed().as_millis());
 }
@@ -99,6 +100,44 @@ fn demo_waiting_for_multiple_random_sleeps_with_return_values() {
     task::block_on(async {
         while let Some(value_returned_from_the_future) = cf.next().await {
             sum += value_returned_from_the_future;
+        }
+    });
+
+    println!("Sum of all values returned = {}", sum);
+}
+
+async fn sleep_and_print_and_return_error(future_number: u32, sleep_millis: u64) -> Result<u32, String> {
+    let sleep_duration = Duration::from_millis(sleep_millis);
+    task::sleep(sleep_duration).await;
+    println!("Future {} slept for {} ms on thread {:?}", future_number, sleep_millis, thread::current().id());
+
+    if future_number % 2 == 0 {
+        Ok(future_number * 10)
+    } else {
+        Err(format!("It didn't work for future {}", future_number))
+    }
+}
+
+fn demo_waiting_for_multiple_random_sleeps_with_errors() {
+    let between = Uniform::from(500..10_000);
+    let mut rng = rand::thread_rng();
+
+    let mut futures = FuturesUnordered::new();
+
+    for future_number in 0..10 {
+        let random_millis = between.sample(&mut rng);
+        futures.push(sleep_and_print_and_return_error(future_number, random_millis));
+    }
+
+    // Now, `value_returned_from_the_future` is a `Result<u32, String>` so
+    // we must take care to pattern match on it.
+    let mut sum = 0;
+    task::block_on(async {
+        while let Some(value_returned_from_the_future) = futures.next().await {
+            match value_returned_from_the_future {
+                Ok(value) => sum += value,
+                Err(e) => println!("    Got error back: {}", e),
+            }
         }
     });
 
