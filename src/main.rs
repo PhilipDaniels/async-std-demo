@@ -9,7 +9,8 @@ fn main() {
     let start_time = Instant::now();
 
     //demo_waiting_for_two_async_fns();
-    demo_waiting_for_multiple_random_sleeps();
+    //demo_waiting_for_multiple_random_sleeps();
+    demo_waiting_for_multiple_random_sleeps_with_return_values();
 
     println!("Program finished in {} ms", start_time.elapsed().as_millis());
 }
@@ -71,4 +72,35 @@ fn demo_waiting_for_multiple_random_sleeps() {
         while let Some(_value_returned_from_the_future) = futures.next().await {
         }
     });
+}
+
+async fn sleep_and_print_and_return_value(future_number: u32, sleep_millis: u64) -> u32 {
+    let sleep_duration = Duration::from_millis(sleep_millis);
+    task::sleep(sleep_duration).await;
+    println!("Future {} slept for {} ms on thread {:?}", future_number, sleep_millis, thread::current().id());
+
+    future_number * 10
+}
+
+fn demo_waiting_for_multiple_random_sleeps_with_return_values() {
+    let between = Uniform::from(500..10_000);
+    let mut rng = rand::thread_rng();
+
+    let mut cf = FuturesUnordered::new();
+
+    for future_number in 0..10 {
+        let random_millis = between.sample(&mut rng);
+        cf.push(sleep_and_print_and_return_value(future_number, random_millis));
+    }
+
+    // The async block borrows a mutable reference to `sum`, allowing us to
+    // add up all the values returned from the future.
+    let mut sum = 0;
+    task::block_on(async {
+        while let Some(value_returned_from_the_future) = cf.next().await {
+            sum += value_returned_from_the_future;
+        }
+    });
+
+    println!("Sum of all values returned = {}", sum);
 }
