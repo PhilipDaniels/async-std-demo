@@ -12,7 +12,8 @@ fn main() {
     //demo_waiting_for_multiple_random_sleeps();
     //demo_waiting_for_multiple_random_sleeps_with_return_values();
     //demo_waiting_for_multiple_random_sleeps_with_errors();
-    demo_downloading_urls();
+    //demo_downloading_urls_on_one_thread();
+    demo_downloading_urls_on_multiple_threads();
 
     println!("Program finished in {} ms", start_time.elapsed().as_millis());
 }
@@ -156,34 +157,34 @@ async fn download_url(url: &str) -> Result<String, surf::Exception> {
     Ok(body)
 }
 
-fn demo_downloading_urls() {
-    let urls = vec![
-        "https://www.sharecast.com/equity/Anglo_American",
-        "https://www.sharecast.com/equity/Associated_British_Foods",
-        "https://www.sharecast.com/equity/Admiral_Group",
-        "https://www.sharecast.com/equity/Aberdeen_Asset_Management",
-        "https://www.sharecast.com/equity/Aggreko",
-        "https://www.sharecast.com/equity/Ashtead_Group",
-        "https://www.sharecast.com/equity/Antofagasta",
-        "https://www.sharecast.com/equity/Aviva",
-        "https://www.sharecast.com/equity/AstraZeneca",
-        "https://www.sharecast.com/equity/BAE_Systems",
-        "https://www.sharecast.com/equity/Babcock_International_Group",
-        "https://www.sharecast.com/equity/British_American_Tobacco",
-        "https://www.sharecast.com/equity/Balfour_Beatty",
-        "https://www.sharecast.com/equity/Barratt_Developments",
-        "https://www.sharecast.com/equity/BG_Group",
-        "https://www.sharecast.com/equity/British_Land_Company",
-        "https://www.sharecast.com/equity/BHP_Group",
-        "https://www.sharecast.com/equity/Bunzl",
-        "https://www.sharecast.com/equity/BP",
-        "https://www.sharecast.com/equity/Burberry_Group",
-        "https://www.sharecast.com/equity/BT_Group",
-    ];
+const URLS: [&str; 21] = [
+    "https://www.sharecast.com/equity/Anglo_American",
+    "https://www.sharecast.com/equity/Associated_British_Foods",
+    "https://www.sharecast.com/equity/Admiral_Group",
+    "https://www.sharecast.com/equity/Aberdeen_Asset_Management",
+    "https://www.sharecast.com/equity/Aggreko",
+    "https://www.sharecast.com/equity/Ashtead_Group",
+    "https://www.sharecast.com/equity/Antofagasta",
+    "https://www.sharecast.com/equity/Aviva",
+    "https://www.sharecast.com/equity/AstraZeneca",
+    "https://www.sharecast.com/equity/BAE_Systems",
+    "https://www.sharecast.com/equity/Babcock_International_Group",
+    "https://www.sharecast.com/equity/British_American_Tobacco",
+    "https://www.sharecast.com/equity/Balfour_Beatty",
+    "https://www.sharecast.com/equity/Barratt_Developments",
+    "https://www.sharecast.com/equity/BG_Group",
+    "https://www.sharecast.com/equity/British_Land_Company",
+    "https://www.sharecast.com/equity/BHP_Group",
+    "https://www.sharecast.com/equity/Bunzl",
+    "https://www.sharecast.com/equity/BP",
+    "https://www.sharecast.com/equity/Burberry_Group",
+    "https://www.sharecast.com/equity/BT_Group",
+];
 
+fn demo_downloading_urls_on_one_thread() {
     // This time let's make our FuturesUnordered value by collecting
     // a set of futures.
-    let mut futures = urls.iter()
+    let mut futures = URLS.iter()
         .map(|url| download_url(url))
         .collect::<FuturesUnordered<_>>();
 
@@ -195,6 +196,27 @@ fn demo_downloading_urls() {
                 },
                 Err(e) => println!("    Got error {:?}", e),
             }
+        }
+    });
+}
+
+fn demo_downloading_urls_on_multiple_threads() {
+    let mut tasks = Vec::with_capacity(URLS.len());
+
+    for url in URLS.iter() {
+        let url = url.to_string();
+        tasks.push(task::spawn(async move {
+            match download_url(&url).await {
+                Ok(body) => { // Possibly do something useful with the body of the request here.
+                },
+                Err(e) => println!("    Got error {:?}", e),
+            }
+        }))
+    }
+
+    task::block_on(async {
+        for t in tasks {
+            t.await;
         }
     });
 }
